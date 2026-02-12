@@ -1,0 +1,22 @@
+/* Simple fade */
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity .5s ease, transform .5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+    transform: translateY(4px);
+}
+
+/* Slightly smoother variant (optional) */
+.fade-slow-enter-active,
+.fade-slow-leave-active {
+    transition: opacity 320ms ease;
+}
+
+.fade-slow-enter-from,
+.fade-slow-leave-to {
+    opacity: 0;
+}
