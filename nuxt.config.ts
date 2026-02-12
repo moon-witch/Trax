@@ -8,11 +8,12 @@ export default defineNuxtConfig({
         dbURL: process.env.DATABASE_URL,
         cookieName: process.env.AUTH_COOKIE_NAME,
         authSessionDays: process.env.AUTH_SESSION_DAYS,
+        secretPW: process.env.SECRET_PASSWORD,
 
         // Public keys that are exposed to the client
         public: {
             env: process.env.ENV,
-            publicName: process.env.NUXT_PUBLIC_APP_NAME,
+            publicName: process.env.NUXT_PUBLIC_APP_NAME
         },
     },
     app: {

@@ -19,7 +19,7 @@ onMounted(() => {
     </div>
     <SettingsButton v-if="authenticated === true" />
     <slot />
-    <nav class="bottom-nav">
+    <nav v-if="authenticated === true" class="bottom-nav">
       <NuxtLink class="nav-item" to="/">Day</NuxtLink>
       <NuxtLink class="nav-item" to="/week">Week</NuxtLink>
       <NuxtLink class="nav-item" to="/stats">Stats</NuxtLink>
