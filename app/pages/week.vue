@@ -336,7 +336,7 @@ watch(refDate, refreshAll);
 </template>
 
 <style scoped>
-.wrap { padding: 16px; max-width: 720px; padding-top: 5rem; padding-bottom: 5rem; }
+.wrap { padding: 16px; max-width: 720px; padding-top: 5rem; padding-bottom: 5rem; @media (min-width: 768px) { justify-self: center; width: 50%;}}
 .top h1 { margin: 0 0 10px; font-size: 25px; text-align: center;}
 .picker { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; align-items: center; }
 label { display: grid; gap: 6px; font-size: 13px; text-align: center;}
