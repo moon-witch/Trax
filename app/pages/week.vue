@@ -276,8 +276,8 @@ watch(refDate, refreshAll);
           <div class="day-head">
             <div class="date">{{ formatDisplayDate(d.date) }}</div>
             <div class="sum">
-              {{ formatMinutes(d.worked) }}
-              <span class="ot">OT {{ formatMinutes(d.overtime) }}</span>
+              {{ formatMinutes(d.worked) }} hr
+              <span class="ot">OT {{ formatMinutes(d.overtime) }} hr</span>
             </div>
             <div v-if="d.entries.length === 0" class="empty">
               <button :disabled="loading" @click="openCreate(d.date)">+</button>
@@ -305,7 +305,7 @@ watch(refDate, refreshAll);
                   <span v-if="!e.end_time" class="muted"> (running)</span>
                 </span>
                 <span class="worked">
-                  {{ e.end_time ? formatMinutes(workedMinutes(e)) : "—" }}
+                  {{ e.end_time ? formatMinutes(workedMinutes(e)) : "—" }} hr
                 </span>
               </div>
 
@@ -336,7 +336,7 @@ watch(refDate, refreshAll);
 </template>
 
 <style scoped>
-.wrap { padding: 16px; max-width: 720px; padding-top: 5rem; padding-bottom: 5rem; @media (min-width: 768px) { justify-self: center; width: 50%;}}
+.wrap { padding: 16px; max-width: 720px; padding-top: 5rem; padding-bottom: 5rem; @media (min-width: 768px) { justify-self: center; width: 30%;}}
 .top h1 { margin: 0 0 10px; font-size: 25px; text-align: center;}
 .picker { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; align-items: center; }
 label { display: grid; gap: 6px; font-size: 13px; text-align: center;}
