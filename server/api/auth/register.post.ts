@@ -5,7 +5,7 @@ import { rateLimit } from "../../utils/rateLimit";
 
 export default defineEventHandler(async (event) => {
     // Separate bucket from login
-    await rateLimit(event, "auth:register", 5, 60);
+    await rateLimit(event, "auth:register", 20, 60);
 
     const body = await readBody<{
         email?: string;
