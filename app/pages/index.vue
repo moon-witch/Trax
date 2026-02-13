@@ -265,6 +265,7 @@ onMounted(async () => {
         <div><strong>Overtime</strong> {{ formatMinutes(dayOvertime) }} hr</div>
       </div>
     </header>
+    <div class="controls">
       <h2>Track time</h2>
 
       <div class="track">
@@ -280,21 +281,22 @@ onMounted(async () => {
           {{ breakRunning ? "End break" : "Break" }}
         </button>
 
-          <button class="primary" :disabled="loading" @click="openCreatePrefilled()">
-            Add
-          </button>
+        <button class="primary" :disabled="loading" @click="openCreatePrefilled()">
+          Add
+        </button>
       </div>
 
-    <Transition v-if="timerRunning && timerStartHHMM" appear name="fade" tag="div">
-      <div class="timer" >
-        Running since <strong>{{ timerStartHHMM }}</strong>
-        <span v-if="breakSeconds" class="muted"> · Break {{ formatSeconds(breakSeconds) }}</span>
-        <span v-if="breakRunning" class="muted"> · on break</span>
-        <span v-else-if="breakMinutes" class="muted"> · break total {{ breakMinutes }}m</span>
-      </div>
-    </Transition>
+      <Transition v-if="timerRunning && timerStartHHMM" appear name="fade" tag="div">
+        <div class="timer" >
+          Running since <strong>{{ timerStartHHMM }}</strong>
+          <span v-if="breakSeconds" class="muted"> · Break {{ formatSeconds(breakSeconds) }}</span>
+          <span v-if="breakRunning" class="muted"> · on break</span>
+          <span v-else-if="breakMinutes" class="muted"> · break total {{ breakMinutes }}m</span>
+        </div>
+      </Transition>
 
       <p v-if="error" class="error">{{ error }}</p>
+    </div>
 
       <h2>Entries</h2>
 
@@ -395,9 +397,16 @@ h1 {
 }
 
 h2 {
-  margin-top: 2rem;
+  margin-top: 0;
   font-size: 20px;
   text-align: center;
+}
+
+.controls {
+  border: 1px solid #efefef;
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 1rem;
 }
 
 .track {
