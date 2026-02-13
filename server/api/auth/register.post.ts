@@ -11,11 +11,13 @@ export default defineEventHandler(async (event) => {
         email?: string;
         password?: string;
         secret?: string;
+        name?: string;
     }>(event);
 
     const email = (body.email || "").trim().toLowerCase();
     const password = body.password || "";
     const providedSecret = String(body.secret || "");
+    const name = String(body.name || email.split("@")[0] || "").trim();
 
     // Validate registration secret
     const config = useRuntimeConfig();
@@ -35,15 +37,20 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: "Invalid email or password" });
     }
 
+    // Validate name
+    if (!name || name.length > 60) {
+        throw createError({ statusCode: 400, statusMessage: "Invalid name" });
+    }
+
     const passwordHash = await argon2.hash(password);
 
     let userId: string;
     try {
         const r = await pool.query(
-            `insert into app_users (email, password_hash)
-       values ($1, $2)
+            `insert into app_users (email, password_hash, name)
+       values ($1, $2, $3)
        returning id`,
-            [email, passwordHash]
+            [email, passwordHash, name]
         );
         userId = r.rows[0].id;
     } catch (e: any) {
