@@ -203,7 +203,6 @@ async function exportMonthCsv() {
   gap: 12px;
   justify-content: center;
   align-items: center;
-  flex-wrap: wrap;
 }
 
 .field {
@@ -217,6 +216,7 @@ input {
   font-size: 14px;
   border-radius: 10px;
   border: 1px solid #cfcfcf;
+  text-align: center;
 }
 
 .btn {
