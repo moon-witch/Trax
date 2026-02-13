@@ -1,54 +1,68 @@
-type Settings = {
-    baseline_weekly_minutes: number;
+import { ref } from "vue";
+
+type SettingsDTO = {
+    baselineWeeklyMinutes: number;
+    baselineDailyMinutes: number;
+    workdaysPerWeek: number;
 };
 
-const DEFAULT = 2400;
-
-let pending: Promise<void> | null = null;
-
 export function useSettings() {
-    const settings = useState<Settings | null>("settings", () => null);
+    const baselineWeeklyMinutes = ref<number>(2400);
+    const baselineDailyMinutes = ref<number>(480);
+    const workdaysPerWeek = ref<number>(5);
 
-    const baselineWeeklyMinutes = computed({
-        get: () => settings.value?.baseline_weekly_minutes ?? DEFAULT,
-        set: (v: number) => {
-            settings.value = { baseline_weekly_minutes: v };
-        },
-    });
+    const loading = ref(false);
+    const error = ref<string | null>(null);
 
     async function refreshSettings() {
-        if (pending) return pending;
+        loading.value = true;
+        error.value = null;
 
-        pending = (async () => {
-            const headers = import.meta.server ? useRequestHeaders(["cookie"]) : undefined;
-
-            const r = await $fetch<{ settings: Settings }>("/api/settings", {
+        try {
+            const r = await $fetch<{ ok: boolean; settings: SettingsDTO }>("/api/settings", {
+                method: "GET",
                 credentials: "include",
-                headers,
             });
 
-            settings.value = r.settings;
-        })().finally(() => (pending = null));
-
-        return pending;
+            baselineWeeklyMinutes.value = Number(r.settings.baselineWeeklyMinutes ?? 2400);
+            baselineDailyMinutes.value = Number(r.settings.baselineDailyMinutes ?? 480);
+            workdaysPerWeek.value = Number(r.settings.workdaysPerWeek ?? 5);
+        } catch (e: any) {
+            error.value = e?.data?.statusMessage || e?.message || "Failed to load settings";
+            throw e;
+        } finally {
+            loading.value = false;
+        }
     }
 
-    async function saveSettings(minutes: number) {
-        const headers = import.meta.server ? useRequestHeaders(["cookie"]) : undefined;
+    async function saveSettings(payload: SettingsDTO) {
+        loading.value = true;
+        error.value = null;
 
-        const r = await $fetch<{ settings: Settings }>("/api/settings", {
-            method: "PUT",
-            credentials: "include",
-            headers,
-            body: { baseline_weekly_minutes: minutes },
-        });
+        try {
+            const r = await $fetch<{ ok: boolean; settings: SettingsDTO }>("/api/settings", {
+                method: "PUT",
+                credentials: "include",
+                body: payload,
+            });
 
-        settings.value = r.settings;
+            baselineWeeklyMinutes.value = Number(r.settings.baselineWeeklyMinutes);
+            baselineDailyMinutes.value = Number(r.settings.baselineDailyMinutes);
+            workdaysPerWeek.value = Number(r.settings.workdaysPerWeek);
+        } catch (e: any) {
+            error.value = e?.data?.statusMessage || e?.message || "Failed to save settings";
+            throw e;
+        } finally {
+            loading.value = false;
+        }
     }
 
     return {
-        settings,
         baselineWeeklyMinutes,
+        baselineDailyMinutes,
+        workdaysPerWeek,
+        loading,
+        error,
         refreshSettings,
         saveSettings,
     };

@@ -79,7 +79,7 @@ function confirmRegister() {
 </script>
 
 <template>
-  <main class="wrap">
+  <main class="wrap" @keyup.enter="login">
     <section class="card">
       <h1>Sign in</h1>
 
@@ -144,6 +144,12 @@ function confirmRegister() {
   max-width: 420px;
   padding: 16px;
   text-align: center;
+  padding-bottom: 20rem;
+  position: relative;
+
+  @media (min-width: 768px) {
+    padding-bottom: 10rem;
+  }
 }
 
 label {
@@ -180,9 +186,12 @@ button {
 }
 
 .error {
-  margin-top: 12px;
   color: #b00020;
   font-size: 13px;
+  position: absolute;
+  bottom: 7rem;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 /* Dialog */

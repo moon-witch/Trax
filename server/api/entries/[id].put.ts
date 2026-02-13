@@ -23,15 +23,13 @@ export default defineEventHandler(async (event) => {
     const note = body.note !== undefined ? body.note : undefined;
 
     const cur = await pool.query(
-        `
-    select
-      to_char(work_date, 'YYYY-MM-DD') as work_date,
-      start_time::text as start_time,
-      end_time::text as end_time,
-      break_minutes
-    from work_entries
-    where id = $1 and user_id = $2
-    `,
+        `select
+        work_date,
+        start_time::text as start_time,
+        end_time::text as end_time,
+        break_minutes
+     from work_entries
+     where id = $1 and user_id = $2`,
         [id, userId]
     );
 
@@ -39,58 +37,51 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: "Entry not found" });
     }
 
-    const curRow = cur.rows[0];
-
     const merged = {
-        work_date: work_date ?? curRow.work_date,
-        start_time: start_time ?? String(curRow.start_time).slice(0, 5),
-        end_time: end_time ?? (curRow.end_time ? String(curRow.end_time).slice(0, 5) : undefined),
-        break_minutes: break_minutes ?? curRow.break_minutes ?? 0,
+        work_date: work_date ?? cur.rows[0].work_date,
+        start_time: start_time ?? cur.rows[0].start_time.slice(0, 5),
+        end_time: end_time ?? cur.rows[0].end_time.slice(0, 5),
+        break_minutes: break_minutes ?? cur.rows[0].break_minutes,
     };
 
-    if (work_date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(work_date)) {
+    if (work_date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(work_date))) {
         throw createError({ statusCode: 400, statusMessage: "work_date must be YYYY-MM-DD" });
     }
-    if (start_time !== undefined && !/^\d{2}:\d{2}$/.test(start_time)) {
-        throw createError({ statusCode: 400, statusMessage: "start_time must be HH:MM" });
-    }
-    if (end_time !== undefined && !/^\d{2}:\d{2}$/.test(end_time)) {
-        throw createError({ statusCode: 400, statusMessage: "end_time must be HH:MM" });
+    if (
+        (start_time !== undefined && !/^\d{2}:\d{2}$/.test(start_time)) ||
+        (end_time !== undefined && !/^\d{2}:\d{2}$/.test(end_time))
+    ) {
+        throw createError({ statusCode: 400, statusMessage: "start_time/end_time must be HH:MM" });
     }
 
-    // If end_time is being set (or already exists), validate duration/breaks
-    if (merged.end_time) {
-        computeWorkedMinutes(merged.start_time, merged.end_time, merged.break_minutes);
-    }
+    computeWorkedMinutes(merged.start_time, merged.end_time, merged.break_minutes);
 
     try {
         const r = await pool.query(
-            `
-      update work_entries
-      set work_date = coalesce($3::date, work_date),
-          start_time = coalesce($4::time, start_time),
-          end_time = coalesce($5::time, end_time),
-          break_minutes = coalesce($6::int, break_minutes),
-          note = case when $7::text is null then note else $7::text end
-      where id = $1 and user_id = $2
-      returning
-        id,
-        to_char(work_date, 'YYYY-MM-DD') as work_date,
-        start_time::text as start_time,
-        end_time::text as end_time,
-        break_minutes,
-        note
-      `,
+            `update work_entries
+       set work_date = coalesce($3::date, work_date),
+           start_time = coalesce($4::time, start_time),
+           end_time = coalesce($5::time, end_time),
+           break_minutes = coalesce($6::int, break_minutes),
+           note = case when $7::text is null then note else $7::text end
+       where id = $1 and user_id = $2
+       returning
+         id,
+         to_char(work_date, 'YYYY-MM-DD') as work_date,
+         start_time::text as start_time,
+         end_time::text as end_time,
+         break_minutes,
+         note,
+         baseline_daily_minutes_at_time,
+         baseline_weekly_minutes_at_time,
+         workdays_per_week_at_time;`,
             [id, userId, work_date ?? null, start_time ?? null, end_time ?? null, break_minutes ?? null, note ?? null]
         );
 
         return { ok: true, entry: r.rows[0] };
     } catch (e: any) {
-        if (e?.code === "23P01") {
-            throw createError({ statusCode: 409, statusMessage: "Time overlaps with another entry" });
-        }
-        if (e?.code === "23514") {
-            throw createError({ statusCode: 409, statusMessage: "Invalid time range" });
+        if (e?.code === "23505") {
+            throw createError({ statusCode: 409, statusMessage: "Entry for this day already exists" });
         }
         throw createError({ statusCode: 500, statusMessage: "Database error" });
     }

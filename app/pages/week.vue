@@ -10,6 +10,9 @@ type Entry = {
   end_time: string | null; // allow null (running)
   break_minutes: number;
   note: string | null;
+
+  // snapshot baseline for overtime calculations
+  baseline_daily_minutes_at_time: number;
 };
 
 type EntryForm = {
@@ -28,24 +31,19 @@ function formatLocalDate(d: Date) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-
 function parseLocalDate(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
-
 function weekRangeLocal(dateStr: string) {
   const d = parseLocalDate(dateStr);
   const day = (d.getDay() + 6) % 7; // 0=Mon..6=Sun
   const monday = new Date(d);
   monday.setDate(d.getDate() - day);
-
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-
   return { from: formatLocalDate(monday), to: formatLocalDate(sunday) };
 }
-
 function normalizeWorkDate(v: any): string {
   if (typeof v === "string") return v.slice(0, 10);
   try {
@@ -60,12 +58,10 @@ function hhmm(t: string | null) {
   if (!t) return "";
   return String(t).slice(0, 5);
 }
-
 function toMinutes(hm: string) {
   const [h, m] = hm.split(":").map(Number);
   return h * 60 + m;
 }
-
 function workedMinutes(e: Entry) {
   const s = toMinutes(hhmm(e.start_time));
   const enStr = hhmm(e.end_time);
@@ -73,7 +69,6 @@ function workedMinutes(e: Entry) {
   const en = toMinutes(enStr);
   return Math.max(0, en - s - (e.break_minutes || 0));
 }
-
 function formatMinutes(min: number) {
   const sign = min < 0 ? "-" : "";
   const abs = Math.abs(min);
@@ -82,19 +77,30 @@ function formatMinutes(min: number) {
   return `${sign}${h}:${String(m).padStart(2, "0")}`;
 }
 
+/** Baseline snapshot rule for a day: baseline of earliest entry that day */
+function dailyTargetMinutes(entriesForDay: Entry[]): number {
+  if (!entriesForDay.length) return 0;
+  const sorted = [...entriesForDay].sort((a, b) => hhmm(a.start_time).localeCompare(hhmm(b.start_time)));
+  return Number(sorted[0].baseline_daily_minutes_at_time) || 480;
+}
+
 const refDate = ref(formatLocalDate(new Date())); // YYYY-MM-DD
-const loading = ref(false);
+const loading = ref(true);
 const error = ref<string | null>(null);
 const entries = ref<Entry[]>([]);
-
 const range = computed(() => weekRangeLocal(refDate.value));
 
 /** Settings */
 const { baselineWeeklyMinutes, refreshSettings } = useSettings();
-
 const expectedWeek = computed(() => baselineWeeklyMinutes.value);
+
 const weekWorked = computed(() => entries.value.reduce((acc, e) => acc + workedMinutes(e), 0));
-const weekBalance = computed(() => weekWorked.value - expectedWeek.value);
+
+/**
+ * Forces TransitionGroup to re-mount after each load so that enter transitions
+ * (and therefore staggering) reliably run.
+ */
+const listVersion = ref(0);
 
 async function loadWeek() {
   error.value = null;
@@ -104,11 +110,14 @@ async function loadWeek() {
       query: { from: range.value.from, to: range.value.to },
       credentials: "include",
     });
-
     entries.value = (r.entries || []).map((e) => ({
       ...e,
       work_date: normalizeWorkDate(e.work_date),
+      baseline_daily_minutes_at_time: Number(e.baseline_daily_minutes_at_time),
     })) as Entry[];
+
+    // bump after the DOM data is replaced
+    listVersion.value += 1;
   } catch (e: any) {
     error.value = e?.data?.statusMessage || e?.message || "Failed to load week";
   } finally {
@@ -128,7 +137,7 @@ const groupedByDay = computed(() => {
     map.set(k, list);
   }
 
-  const days: { date: string; entries: Entry[]; worked: number }[] = [];
+  const days: { date: string; entries: Entry[]; worked: number; overtime: number; target: number }[] = [];
   const start = parseLocalDate(range.value.from);
 
   for (let i = 0; i < 7; i++) {
@@ -138,11 +147,17 @@ const groupedByDay = computed(() => {
 
     const list = map.get(key) || [];
     const worked = list.reduce((acc, x) => acc + workedMinutes(x), 0);
-    days.push({ date: key, entries: list, worked });
+    const target = dailyTargetMinutes(list);
+    const overtime = Math.max(0, worked - target);
+
+    days.push({ date: key, entries: list, worked, overtime, target });
   }
 
   return days;
 });
+
+const weekTarget = computed(() => groupedByDay.value.reduce((acc, d) => acc + d.target, 0));
+const weekOvertime = computed(() => Math.max(0, weekWorked.value - weekTarget.value));
 
 /** Editor */
 const editorOpen = ref(false);
@@ -154,7 +169,6 @@ const editorEntry = ref<EntryForm>({
   break_minutes: 0,
   note: null,
 });
-
 function openCreate(day: string) {
   editorMode.value = "create";
   editorEntry.value = {
@@ -166,7 +180,6 @@ function openCreate(day: string) {
   };
   editorOpen.value = true;
 }
-
 function openEdit(e: Entry) {
   editorMode.value = "edit";
   editorEntry.value = {
@@ -179,7 +192,6 @@ function openEdit(e: Entry) {
   };
   editorOpen.value = true;
 }
-
 async function submitEditor(e: EntryForm) {
   error.value = null;
   loading.value = true;
@@ -204,17 +216,14 @@ async function submitEditor(e: EntryForm) {
         },
       });
     }
-
     editorOpen.value = false;
     await loadWeek();
   } catch (err: any) {
-    error.value =
-        err?.data?.statusMessage || err?.data?.message || err?.message || "Failed to save entry";
+    error.value = err?.data?.statusMessage || err?.data?.message || err?.message || "Failed to save entry";
   } finally {
     loading.value = false;
   }
 }
-
 async function deleteEntry(e: Entry) {
   error.value = null;
   loading.value = true;
@@ -222,15 +231,15 @@ async function deleteEntry(e: Entry) {
     await $fetch(`/api/entries/${e.id}`, { method: "DELETE", credentials: "include" });
     await loadWeek();
   } catch (err: any) {
-    error.value =
-        err?.data?.statusMessage || err?.data?.message || err?.message || "Failed to delete entry";
+    error.value = err?.data?.statusMessage || err?.data?.message || err?.message || "Failed to delete entry";
   } finally {
     loading.value = false;
   }
 }
 
 async function refreshAll() {
-  await Promise.all([refreshSettings().catch(() => undefined), loadWeek()]);
+  await refreshSettings().catch(() => undefined);
+  await loadWeek();
 }
 
 onMounted(refreshAll);
@@ -241,7 +250,6 @@ watch(refDate, refreshAll);
   <main class="wrap">
     <header class="top">
       <h1>Week</h1>
-
       <div class="picker">
         <label>
           Reference date
@@ -252,8 +260,10 @@ watch(refDate, refreshAll);
         </div>
       </div>
 
+      <!-- No fade for stats -->
       <div class="stats">
         <div><strong>Weekly hours</strong> {{ formatMinutes(weekWorked) }} / {{ formatMinutes(expectedWeek) }}</div>
+        <div><strong>Overtime</strong> {{ formatMinutes(weekOvertime) }}</div>
       </div>
     </header>
 
@@ -267,14 +277,28 @@ watch(refDate, refreshAll);
             <div class="date">{{ formatDisplayDate(d.date) }}</div>
             <div class="sum">
               {{ formatMinutes(d.worked) }}
+              <span class="ot">OT {{ formatMinutes(d.overtime) }}</span>
             </div>
             <div v-if="d.entries.length === 0" class="empty">
               <button :disabled="loading" @click="openCreate(d.date)">+</button>
             </div>
           </div>
 
-          <ul v-if="d.entries.length > 0" class="list">
-            <li v-for="e in d.entries" :key="e.id" class="item">
+          <!-- Staggered entry fade-in (per day) -->
+          <TransitionGroup
+              v-if="d.entries.length > 0"
+              :key="`${d.date}-${listVersion}`"
+              tag="ul"
+              name="fade"
+              class="list"
+              appear
+          >
+            <li
+                v-for="(e, idx) in d.entries"
+                :key="e.id"
+                class="item"
+                :style="{ transitionDelay: `${idx * 150}ms` }"
+            >
               <div class="line">
                 <span class="time">
                   {{ hhmm(e.start_time) }}–{{ hhmm(e.end_time) || "…" }}
@@ -296,7 +320,7 @@ watch(refDate, refreshAll);
                 <button :disabled="loading || !e.end_time" @click="deleteEntry(e)">Delete</button>
               </div>
             </li>
-          </ul>
+          </TransitionGroup>
         </article>
       </div>
     </section>
@@ -318,16 +342,35 @@ watch(refDate, refreshAll);
 label { display: grid; gap: 6px; font-size: 13px; text-align: center;}
 input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px solid #cfcfcf; }
 .range { font-size: 13px; opacity: 0.85;}
-.stats { text-align: center; border: 1px solid #efefef; border-radius: 4px; padding: .5rem; font-size: 15px; margin: 1rem;}
-.card { padding: 14px; background: none; color: black;}
+.stats { text-align: center; border: 1px solid #efefef; border-radius: 4px; padding: .5rem; font-size: 15px; margin: 1rem; }
+.card { padding: 14px; background: none; color: black; }
 .error { color: #b00020; font-size: 13px; margin: 0 0 10px; }
 .muted { font-size: 13px; opacity: 0.75; }
+
 .days { display: grid; gap: 10px; }
-.day { border: 1px solid #e0e0e0; border-radius: 4px; padding: 12px; background: white;}
-.day-head { position: relative; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; background: #e6e6e6; border-radius: 4px; padding: 4px 8px;}
+
+.day {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 12px;
+  background: white;
+}
+
+.day-head {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  background: #e6e6e6;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
 .date { font-weight: 600; font-size: 13px; }
-.sum { font-size: 13px; padding-right: 10px;}
-.empty { position: absolute; top: 50%; right: -25px; transform: translateY(-50%); background: white; border-radius: 4px;}
+.sum { font-size: 13px; padding-right: 10px; }
+.ot { margin-left: 8px; opacity: 0.9; }
+.empty { position: absolute; top: 50%; right: -25px; transform: translateY(-50%); background: white; border-radius: 4px; }
+
 .list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 10px; }
 .item { border-top: 1px solid #efefef; padding-top: 10px; }
 .item:first-child { border-top: none; padding-top: 0; }
@@ -337,4 +380,10 @@ input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px so
 .sub { margin-top: 4px; }
 .actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
 .actions button, .empty button { padding: 8px 10px; font-size: 13px; border-radius: 4px; border: none; background: #e6e6e6; }
+
+/* Move transitions for TransitionGroup */
+.list :deep(.fade-move) { transition: transform .5s ease; }
+
+/* Do not keep delays when leaving (prevents odd delayed removals) */
+.list :deep(.fade-leave-active) { transition-delay: 0ms !important; }
 </style>

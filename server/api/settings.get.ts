@@ -5,7 +5,14 @@ export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event);
 
     const r = await pool.query(
-        `select baseline_weekly_minutes from app_users where id = $1`,
+        `
+    select
+      baseline_weekly_minutes,
+      baseline_daily_minutes,
+      workdays_per_week
+    from app_users
+    where id = $1
+    `,
         [userId]
     );
 
@@ -13,10 +20,14 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, statusMessage: "User not found" });
     }
 
+    const row = r.rows[0];
+
     return {
         ok: true,
         settings: {
-            baseline_weekly_minutes: Number(r.rows[0].baseline_weekly_minutes),
+            baselineWeeklyMinutes: Number(row.baseline_weekly_minutes ?? 2400),
+            baselineDailyMinutes: Number(row.baseline_daily_minutes ?? 480),
+            workdaysPerWeek: Number(row.workdays_per_week ?? 5),
         },
     };
 });

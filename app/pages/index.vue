@@ -24,6 +24,8 @@ type EntryForm = {
 
 const { timerStatus, refreshTimer, startTimer, stopTimer, startBreak, stopBreak } = useTimer();
 
+const userName = ref<string>("");
+
 const today = localYYYYMMDD();
 const selectedDate = ref(today);
 
@@ -85,6 +87,18 @@ function formatSeconds(sec: number) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+async function loadUserName() {
+  try {
+    const r = await $fetch<{ ok: boolean; name: string }>("/api/user/name", {
+      method: "GET",
+      credentials: "include",
+    });
+    userName.value = r?.name || "";
+  } catch {
+    userName.value = "";
+  }
 }
 
 async function loadToday() {
@@ -228,7 +242,10 @@ async function refreshAll() {
 }
 
 onMounted(async () => {
-  await refreshAll();
+  await Promise.all([
+    refreshAll(),
+    loadUserName(),
+  ]);
 });
 </script>
 
@@ -236,6 +253,9 @@ onMounted(async () => {
   <main class="wrap">
     <header class="top">
       <div class="head-row">
+        <Transition name="fade" tag="div" class="greeting">
+          <h2 v-if="userName">Hey, {{ userName }}!</h2>
+        </Transition>
         <h1>Today</h1>
         <div class="date">{{ formatDisplayDate(selectedDate) }}</div>
       </div>
@@ -326,6 +346,13 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.greeting {
+  position: absolute;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #1FA1D0;
+}
 .wrap {
   padding: 16px;
   max-width: 720px;
@@ -337,7 +364,7 @@ onMounted(async () => {
 }
 
 .head-row {
-  margin-top: 5rem;
+  margin-top: 10rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
