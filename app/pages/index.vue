@@ -422,10 +422,12 @@ button {
   border-radius: 10px;
   border: 1px solid #cfcfcf;
   background: white;
+  cursor: pointer;
 }
 
 .primary {
   font-weight: 600;
+
 }
 
 .timer {
@@ -438,6 +440,7 @@ button {
   margin-top: 10px;
   color: #b00020;
   font-size: 13px;
+  text-align: center;
 }
 
 .muted {

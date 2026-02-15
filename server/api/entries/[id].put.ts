@@ -83,6 +83,12 @@ export default defineEventHandler(async (event) => {
         if (e?.code === "23505") {
             throw createError({ statusCode: 409, statusMessage: "Entry for this day already exists" });
         }
+        if (e?.code === "23P01") {
+            throw createError({
+                statusCode: 409,
+                statusMessage: "This entry overlaps with an existing one",
+            });
+        }
         throw createError({ statusCode: 500, statusMessage: "Database error" });
     }
 });
