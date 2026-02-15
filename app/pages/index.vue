@@ -23,6 +23,7 @@ type EntryForm = {
 };
 
 const { timerStatus, refreshTimer, startTimer, stopTimer, startBreak, stopBreak } = useTimer();
+const { baselineDailyMinutes, refreshSettings } = useSettings();
 
 const userName = ref<string>("");
 
@@ -245,6 +246,7 @@ onMounted(async () => {
   await Promise.all([
     refreshAll(),
     loadUserName(),
+    refreshSettings(),
   ]);
 });
 </script>

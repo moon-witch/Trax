@@ -1,12 +1,14 @@
+
 import { pool } from "../utils/db";
 import { requireUserId } from "../utils/auth";
 
 export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event);
 
-    // Pull baseline (weekly) for this user
+    // Pull baseline (weekly) + workdays for this user
     const u = await pool.query(
-        `select baseline_weekly_minutes from app_users where id = $1`,
+        `select baseline_weekly_minutes, baseline_daily_minutes, workdays_per_week
+         from app_users where id = $1`,
         [userId]
     );
 
@@ -15,62 +17,50 @@ export default defineEventHandler(async (event) => {
     }
 
     const baselineWeeklyMinutes = Number(u.rows[0].baseline_weekly_minutes) || 0;
-
-    // Daily baseline derived from weekly baseline (Mon–Fri)
-    // If you later add "workdays per week", change this.
-    const baselineDailyMinutes = Math.round(baselineWeeklyMinutes / 5);
+    const baselineDailyMinutes = Number(u.rows[0].baseline_daily_minutes) || 0;
+    const workdaysPerWeek = Number(u.rows[0].workdays_per_week) || 5;
 
     /**
-     * worked minutes per entry:
-     * extract(epoch from (end_time - start_time))/60 - break_minutes
+     * Overtime = total_worked − (number_of_days_worked × daily_baseline)
      *
-     * Notes:
-     * - excludes running entries (end_time is null)
-     * - clamps negative values to 0
+     * This gives a single signed number:
+     *   positive = you've worked more than expected overall
+     *   negative = you've worked less than expected overall
+     *
+     * Using per-entry baseline snapshots so historical changes are respected.
      */
     const r = await pool.query(
         `
-    with entry_minutes as (
-      select
+    WITH entry_minutes AS (
+      SELECT
         work_date,
-        date_trunc('week', work_date::timestamp)::date as week_start,
         greatest(
           0,
-          (extract(epoch from (end_time - start_time)) / 60)::int - coalesce(break_minutes, 0)
-        ) as minutes
-      from work_entries
-      where user_id = $1
-        and end_time is not null
+          (extract(epoch FROM (end_time - start_time)) / 60)::int
+            - coalesce(break_minutes, 0)
+        ) AS minutes,
+        baseline_daily_minutes_at_time
+      FROM work_entries
+      WHERE user_id = $1
+        AND end_time IS NOT NULL
     ),
-    per_day as (
-      select work_date, sum(minutes)::int as day_minutes
-      from entry_minutes
-      group by work_date
-    ),
-    per_week as (
-      select week_start, sum(minutes)::int as week_minutes
-      from entry_minutes
-      group by week_start
+    per_day AS (
+      SELECT
+        work_date,
+        sum(minutes)::int AS day_minutes,
+        -- use the baseline snapshot from the earliest entry that day
+        (array_agg(baseline_daily_minutes_at_time ORDER BY work_date))[1] AS day_baseline
+      FROM entry_minutes
+      GROUP BY work_date
     )
-    select
-      -- weekly overtime sum
-      coalesce((
-        select sum(greatest(0, week_minutes - $2::int))::int
-        from per_week
-      ), 0) as overtime_weekly_minutes,
-
-      -- daily overtime sum (using baselineWeekly/5)
-      coalesce((
-        select sum(greatest(0, day_minutes - $3::int))::int
-        from per_day
-      ), 0) as overtime_daily_minutes,
-
-      -- optional context
-      coalesce((select sum(minutes)::int from entry_minutes), 0) as total_worked_minutes,
-      coalesce((select count(*)::int from per_week), 0) as weeks_count,
-      coalesce((select count(*)::int from per_day), 0) as days_count
-    `,
-        [userId, baselineWeeklyMinutes, baselineDailyMinutes]
+    SELECT
+      coalesce(sum(day_minutes), 0)::int                          AS total_worked_minutes,
+      coalesce(sum(day_minutes - day_baseline), 0)::int           AS overtime_total_minutes,
+      count(*)::int                                                AS days_count,
+      count(DISTINCT date_trunc('week', work_date::timestamp))::int AS weeks_count
+    FROM per_day
+        `,
+        [userId]
     );
 
     const row = r.rows[0];
@@ -81,8 +71,7 @@ export default defineEventHandler(async (event) => {
             baseline_weekly_minutes: baselineWeeklyMinutes,
             baseline_daily_minutes: baselineDailyMinutes,
 
-            overtime_weekly_minutes: Number(row.overtime_weekly_minutes),
-            overtime_daily_minutes: Number(row.overtime_daily_minutes),
+            overtime_total_minutes: Number(row.overtime_total_minutes),
 
             total_worked_minutes: Number(row.total_worked_minutes),
             weeks_count: Number(row.weeks_count),

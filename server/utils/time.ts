@@ -38,7 +38,7 @@ export function computeWorkedMinutes(startHHMM: string, endHHMM: string, breakMi
 
 /**
  * Compute overtime using a caller-provided baseline (per-user setting).
- * Caller MUST pass dailyTargetMinutes from DB (e.g. app_users.baseline_daily_minutes).
+ * Returns a signed value: positive = overtime, negative = undertime.
  */
 export function overtimeMinutes(workedMinutes: number, dailyTargetMinutes: number) {
     const target = Number(dailyTargetMinutes);
@@ -47,5 +47,5 @@ export function overtimeMinutes(workedMinutes: number, dailyTargetMinutes: numbe
         throw createError({ statusCode: 400, statusMessage: "Invalid daily baseline" });
     }
 
-    return Math.max(0, workedMinutes - target);
+    return workedMinutes - target;
 }

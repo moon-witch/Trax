@@ -148,7 +148,7 @@ const groupedByDay = computed(() => {
     const list = map.get(key) || [];
     const worked = list.reduce((acc, x) => acc + workedMinutes(x), 0);
     const target = dailyTargetMinutes(list);
-    const overtime = Math.max(0, worked - target);
+    const overtime = worked - target;
 
     days.push({ date: key, entries: list, worked, overtime, target });
   }
@@ -157,7 +157,7 @@ const groupedByDay = computed(() => {
 });
 
 const weekTarget = computed(() => groupedByDay.value.reduce((acc, d) => acc + d.target, 0));
-const weekOvertime = computed(() => Math.max(0, weekWorked.value - weekTarget.value));
+const weekOvertime = computed(() => weekWorked.value - weekTarget.value);
 
 /** Editor */
 const editorOpen = ref(false);
