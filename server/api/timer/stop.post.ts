@@ -1,14 +1,6 @@
 import { pool } from "../../utils/db";
 import { requireUserId } from "../../utils/auth";
-import { localYYYYMMDD } from "~/utils/date";
-
-function nowHHMMSS() {
-    const d = new Date();
-    const h = String(d.getHours()).padStart(2, "0");
-    const m = String(d.getMinutes()).padStart(2, "0");
-    const s = String(d.getSeconds()).padStart(2, "0");
-    return `${h}:${m}:${s}`;
-}
+import { localYYYYMMDD, nowHHMMSS } from "~/utils/date";
 
 function addOneSecond(hhmmss: string) {
     const m = /^(\d{2}):(\d{2}):(\d{2})$/.exec(hhmmss);

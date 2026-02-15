@@ -10,3 +10,13 @@ export function formatDisplayDate(dateStr: string) {
     const [y, m, d] = dateStr.split("-");
     return `${Number(d)}.${Number(m)}.${y}`;
 }
+
+export function nowHHMMSS() {
+    return new Date().toLocaleTimeString("en-GB", {
+        timeZone: "Europe/Berlin",
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+    });
+}
