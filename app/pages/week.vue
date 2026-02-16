@@ -24,6 +24,21 @@ type EntryForm = {
   note: string | null;
 };
 
+function distributedWeeklyTargets(weeklyMinutes: number, workdays: number) {
+  const wd = Math.min(7, Math.max(1, Math.floor(workdays)));
+  const week = Math.max(0, Math.floor(weeklyMinutes));
+
+  const base = Math.floor(week / wd);
+  const remainder = week - base * wd;
+
+  // 7-day array; first `wd` days carry the weekly target; remainder added to last workday
+  return Array.from({ length: 7 }, (_, i) => {
+    if (i >= wd) return 0;
+    if (i === wd - 1) return base + remainder;
+    return base;
+  });
+}
+
 /** Date helpers (local time) */
 function formatLocalDate(d: Date) {
   const y = d.getFullYear();
@@ -91,8 +106,12 @@ const entries = ref<Entry[]>([]);
 const range = computed(() => weekRangeLocal(refDate.value));
 
 /** Settings */
-const { baselineWeeklyMinutes, refreshSettings } = useSettings();
-const expectedWeek = computed(() => baselineWeeklyMinutes.value);
+const { baselineWeeklyMinutes, workdaysPerWeek, refreshSettings } = useSettings();
+const expectedWeek = computed(() => Number(baselineWeeklyMinutes.value) || 0);
+const expectedWorkdays = computed(() => {
+  const wd = Number(workdaysPerWeek.value) || 5;
+  return Math.min(7, Math.max(1, Math.floor(wd)));
+});
 
 const weekWorked = computed(() => entries.value.reduce((acc, e) => acc + workedMinutes(e), 0));
 
@@ -137,8 +156,12 @@ const groupedByDay = computed(() => {
     map.set(k, list);
   }
 
-  const days: { date: string; entries: Entry[]; worked: number; overtime: number; target: number }[] = [];
   const start = parseLocalDate(range.value.from);
+
+  // Weekly targets distributed across configured workdays (Mon..)
+  const targetsByDow = distributedWeeklyTargets(expectedWeek.value, expectedWorkdays.value);
+
+  const days: { date: string; entries: Entry[]; worked: number; overtime: number; target: number }[] = [];
 
   for (let i = 0; i < 7; i++) {
     const dt = new Date(start);
@@ -147,7 +170,9 @@ const groupedByDay = computed(() => {
 
     const list = map.get(key) || [];
     const worked = list.reduce((acc, x) => acc + workedMinutes(x), 0);
-    const target = dailyTargetMinutes(list);
+
+    // IMPORTANT: target is derived from weekly plan + workdays, not from “has entries”
+    const target = targetsByDow[i] ?? 0;
     const overtime = worked - target;
 
     days.push({ date: key, entries: list, worked, overtime, target });
@@ -156,8 +181,8 @@ const groupedByDay = computed(() => {
   return days;
 });
 
-const weekTarget = computed(() => groupedByDay.value.reduce((acc, d) => acc + d.target, 0));
-const weekOvertime = computed(() => weekWorked.value - weekTarget.value);
+const weekTarget = computed(() => expectedWeek.value);
+const weekOvertime = computed(() => weekWorked.value - expectedWeek.value);
 
 /** Editor */
 const editorOpen = ref(false);
@@ -277,7 +302,6 @@ watch(refDate, refreshAll);
             <div class="date">{{ formatDisplayDate(d.date) }}</div>
             <div class="sum">
               {{ formatMinutes(d.worked) }} hr
-              <span class="ot">OT {{ formatMinutes(d.overtime) }} hr</span>
             </div>
             <div v-if="d.entries.length === 0" class="empty">
               <button :disabled="loading" @click="openCreate(d.date)">+</button>
