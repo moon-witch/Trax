@@ -24,21 +24,6 @@ type EntryForm = {
   note: string | null;
 };
 
-function distributedWeeklyTargets(weeklyMinutes: number, workdays: number) {
-  const wd = Math.min(7, Math.max(1, Math.floor(workdays)));
-  const week = Math.max(0, Math.floor(weeklyMinutes));
-
-  const base = Math.floor(week / wd);
-  const remainder = week - base * wd;
-
-  // 7-day array; first `wd` days carry the weekly target; remainder added to last workday
-  return Array.from({ length: 7 }, (_, i) => {
-    if (i >= wd) return 0;
-    if (i === wd - 1) return base + remainder;
-    return base;
-  });
-}
-
 /** Date helpers (local time) */
 function formatLocalDate(d: Date) {
   const y = d.getFullYear();
@@ -92,11 +77,33 @@ function formatMinutes(min: number) {
   return `${sign}${h}:${String(m).padStart(2, "0")}`;
 }
 
-/** Baseline snapshot rule for a day: baseline of earliest entry that day */
+/** Baseline snapshot rule for a day: baseline of earliest entry that day (kept for reference/compat) */
 function dailyTargetMinutes(entriesForDay: Entry[]): number {
   if (!entriesForDay.length) return 0;
   const sorted = [...entriesForDay].sort((a, b) => hhmm(a.start_time).localeCompare(hhmm(b.start_time)));
   return Number(sorted[0].baseline_daily_minutes_at_time) || 480;
+}
+
+/**
+ * Weekly targets distributed across configured workdays (Mon..).
+ * Example: 40h/week, 5 workdays => [8h,8h,8h,8h,8h,0,0] (minutes).
+ */
+function distributedWeeklyTargets(weeklyMinutes: number, workdays: number) {
+  const wd = Math.min(7, Math.max(1, Math.floor(workdays)));
+  const week = Math.max(0, Math.floor(weeklyMinutes));
+
+  const base = Math.floor(week / wd);
+  const remainder = week - base * wd;
+
+  return Array.from({ length: 7 }, (_, i) => {
+    if (i >= wd) return 0;
+    if (i === wd - 1) return base + remainder;
+    return base;
+  });
+}
+
+function isHoliday(holidaySet: Set<string>, dateYmd: string) {
+  return holidaySet.has(dateYmd);
 }
 
 const refDate = ref(formatLocalDate(new Date())); // YYYY-MM-DD
@@ -120,6 +127,16 @@ const weekWorked = computed(() => entries.value.reduce((acc, e) => acc + workedM
  * (and therefore staggering) reliably run.
  */
 const listVersion = ref(0);
+
+const holidays = ref<Set<string>>(new Set());
+
+async function loadHolidaysForRange() {
+  const r = await $fetch<{ ok: boolean; holidays: string[] }>("/api/holidays", {
+    query: { from: range.value.from, to: range.value.to },
+    credentials: "include",
+  });
+  holidays.value = new Set((r.holidays || []).map((x) => String(x).slice(0, 10)));
+}
 
 async function loadWeek() {
   error.value = null;
@@ -158,10 +175,18 @@ const groupedByDay = computed(() => {
 
   const start = parseLocalDate(range.value.from);
 
-  // Weekly targets distributed across configured workdays (Mon..)
+  // Weekly plan remains unchanged (e.g., 40h). Holidays on expected workdays add "credit".
   const targetsByDow = distributedWeeklyTargets(expectedWeek.value, expectedWorkdays.value);
 
-  const days: { date: string; entries: Entry[]; worked: number; overtime: number; target: number }[] = [];
+  const days: {
+    date: string;
+    entries: Entry[];
+    worked: number;
+    credit: number;
+    overtime: number;
+    target: number;
+    isHoliday: boolean;
+  }[] = [];
 
   for (let i = 0; i < 7; i++) {
     const dt = new Date(start);
@@ -171,18 +196,35 @@ const groupedByDay = computed(() => {
     const list = map.get(key) || [];
     const worked = list.reduce((acc, x) => acc + workedMinutes(x), 0);
 
-    // IMPORTANT: target is derived from weekly plan + workdays, not from “has entries”
     const target = targetsByDow[i] ?? 0;
-    const overtime = worked - target;
+    const holiday = isHoliday(holidays.value, key);
 
-    days.push({ date: key, entries: list, worked, overtime, target });
+    // Paid holiday credit: if a holiday falls on an expected workday (Mon..workdays),
+    // credit counts as "worked" for overtime purposes, but is not actual worked minutes.
+    const credit = holiday && i < expectedWorkdays.value ? target : 0;
+
+    // Per-day overtime relative to that day's target (worked + credit)
+    const overtime = (worked + credit) - target;
+
+    days.push({
+      date: key,
+      entries: list,
+      worked,
+      credit,
+      overtime,
+      target,
+      isHoliday: holiday,
+    });
   }
 
   return days;
 });
 
+const weekCredit = computed(() => groupedByDay.value.reduce((acc, d) => acc + d.credit, 0));
+const weekWorkedEffective = computed(() => weekWorked.value + weekCredit.value);
+
 const weekTarget = computed(() => expectedWeek.value);
-const weekOvertime = computed(() => weekWorked.value - expectedWeek.value);
+const weekOvertime = computed(() => weekWorkedEffective.value - expectedWeek.value);
 
 /** Editor */
 const editorOpen = ref(false);
@@ -264,7 +306,7 @@ async function deleteEntry(e: Entry) {
 
 async function refreshAll() {
   await refreshSettings().catch(() => undefined);
-  await loadWeek();
+  await Promise.all([loadWeek(), loadHolidaysForRange()]);
 }
 
 onMounted(refreshAll);
@@ -287,7 +329,13 @@ watch(refDate, refreshAll);
 
       <!-- No fade for stats -->
       <div class="stats">
-        <div><strong>Weekly hours</strong> {{ formatMinutes(weekWorked) }} / {{ formatMinutes(expectedWeek) }}</div>
+        <div>
+          <strong>Weekly hours</strong>
+          {{ formatMinutes(weekWorkedEffective) }} / {{ formatMinutes(expectedWeek) }}
+        </div>
+        <div class="muted" v-if="weekCredit">
+          Actual: {{ formatMinutes(weekWorked) }} · Holiday credit: {{ formatMinutes(weekCredit) }}
+        </div>
         <div><strong>Overtime</strong> {{ formatMinutes(weekOvertime) }}</div>
       </div>
     </header>
@@ -299,9 +347,13 @@ watch(refDate, refreshAll);
       <div v-else class="days">
         <article v-for="d in groupedByDay" :key="d.date" class="day">
           <div class="day-head">
-            <div class="date">{{ formatDisplayDate(d.date) }}</div>
+            <div class="date">
+              {{ formatDisplayDate(d.date) }}
+              <span v-if="d.isHoliday" class="muted"> · Holiday</span>
+            </div>
             <div class="sum">
               {{ formatMinutes(d.worked) }} hr
+              <span v-if="d.credit" class="muted"> · Credit {{ formatMinutes(d.credit) }}</span>
             </div>
             <div v-if="d.entries.length === 0" class="empty">
               <button :disabled="loading" @click="openCreate(d.date)">+</button>
@@ -367,6 +419,7 @@ label { display: grid; gap: 6px; font-size: 13px; text-align: center;}
 input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px solid #cfcfcf; }
 .range { font-size: 13px; opacity: 0.85;}
 .stats { text-align: center; border: 1px solid #efefef; border-radius: 4px; padding: .5rem; font-size: 15px; margin: 1rem; }
+.stats .muted {padding-bottom: 1rem; padding-top: .25rem}
 .card { padding: 14px; background: none; color: black; }
 .error { color: #b00020; font-size: 13px; margin: 0 0 10px; }
 .muted { font-size: 13px; opacity: 0.75; }

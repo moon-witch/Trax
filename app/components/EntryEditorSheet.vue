@@ -3,16 +3,16 @@ import { ref, watch, computed } from "vue";
 
 type Entry = {
   id?: string;
-  work_date: string;     // YYYY-MM-DD
-  start_time: string;    // HH:MM
-  end_time: string;      // HH:MM
+  work_date: string; // YYYY-MM-DD
+  start_time: string; // HH:MM
+  end_time: string; // HH:MM
   break_minutes: number;
   note: string | null;
 };
 
 const props = defineProps<{
   modelValue: boolean;
-  entry: Entry;                 // prefilled
+  entry: Entry; // prefilled
   title: string;
   submitLabel: string;
 }>();
@@ -75,55 +75,60 @@ function submit() {
 </script>
 
 <template>
-  <div v-if="open" class="overlay" @click.self="close">
-    <div class="sheet" role="dialog" aria-modal="true">
-      <div class="head">
-        <div class="title">{{ title }}</div>
-        <button class="x" @click="close" aria-label="Close">×</button>
-      </div>
+  <Transition name="overlay-fade">
+    <div v-if="open" class="overlay" @click.self="close">
+      <Transition name="sheet-slide" appear>
+        <div class="sheet" role="dialog" aria-modal="true">
+          <div class="head">
+            <div class="title">{{ title }}</div>
+            <button class="x" @click="close" aria-label="Close">×</button>
+          </div>
 
-      <div class="body">
-        <label>
-          Date
-          <input type="date" v-model="local.work_date" />
-        </label>
+          <div class="body">
+            <label>
+              Date
+              <input type="date" v-model="local.work_date" />
+            </label>
 
-        <div class="row2">
-          <label>
-            Start
-            <input type="time" v-model="local.start_time" />
-          </label>
+            <div class="row2">
+              <label>
+                Start
+                <input type="time" v-model="local.start_time" />
+              </label>
 
-          <label>
-            End
-            <input type="time" v-model="local.end_time" />
-          </label>
+              <label>
+                End
+                <input type="time" v-model="local.end_time" />
+              </label>
+            </div>
+
+            <div class="row2">
+              <label>
+                Break (min)
+                <input type="number" min="0" v-model.number="local.break_minutes" />
+              </label>
+
+              <label>
+                Note
+                <input type="text" v-model="local.note" placeholder="Optional" />
+              </label>
+            </div>
+
+            <p v-if="error" class="error">{{ error }}</p>
+          </div>
+
+          <div class="foot">
+            <button @click="close">Cancel</button>
+            <button class="primary" @click="submit">{{ submitLabel }}</button>
+          </div>
         </div>
-
-        <div class="row2">
-          <label>
-            Break (min)
-            <input type="number" min="0" v-model.number="local.break_minutes" />
-          </label>
-
-          <label>
-            Note
-            <input type="text" v-model="local.note" placeholder="Optional" />
-          </label>
-        </div>
-
-        <p v-if="error" class="error">{{ error }}</p>
-      </div>
-
-      <div class="foot">
-        <button @click="close">Cancel</button>
-        <button class="primary" @click="submit">{{ submitLabel }}</button>
-      </div>
+      </Transition>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style scoped>
+/* Overlay container */
 .overlay {
   position: fixed;
   inset: 0;
@@ -133,16 +138,19 @@ function submit() {
   z-index: 50;
 }
 
+/* Sheet */
 .sheet {
-  background: #fff;
-  border-radius: 16px 16px 0 0;
-  border: 1px solid #e0e0e0;
+  background: #000b0e;
+  border-radius: 4px 4px 0 0;
+  border: 1px solid #efefef;
   padding: 12px 12px 16px;
   max-height: 85dvh;
   overflow: auto;
   color: black;
+  will-change: transform, opacity;
 }
 
+/* Header */
 .head {
   display: flex;
   justify-content: space-between;
@@ -153,18 +161,22 @@ function submit() {
 .title {
   font-size: 16px;
   font-weight: 600;
+  color: white;
+  text-align: center;
 }
 
 .x {
   border: 1px solid #cfcfcf;
-  background: white;
-  border-radius: 10px;
+  background: none;
+  border-radius: 4px;
   width: 36px;
   height: 36px;
   font-size: 20px;
   line-height: 0;
+  color: white;
 }
 
+/* Body */
 .body {
   display: grid;
   gap: 10px;
@@ -174,14 +186,21 @@ label {
   display: grid;
   gap: 6px;
   font-size: 13px;
+  color: #efefef;
+  text-align: center;
 }
 
 input {
   padding: 10px 12px;
   font-size: 14px;
-  border-radius: 10px;
+  border-radius: 4px;
   border: 1px solid #cfcfcf;
   width: 85%;
+  justify-self: center;
+  text-align: center;
+  background: #000b0e;
+  color: white;
+  color-scheme: dark;
 }
 
 .row2 {
@@ -195,6 +214,7 @@ input {
   font-size: 13px;
 }
 
+/* Footer */
 .foot {
   display: flex;
   gap: 10px;
@@ -206,11 +226,40 @@ input {
   padding: 12px;
   font-size: 14px;
   border-radius: 10px;
-  border: 1px solid #cfcfcf;
-  background: white;
+  border: none;
+  background: none;
+  color: #efefef;
 }
 
 .primary {
   font-weight: 600;
+}
+
+/* --- Vue transitions --- */
+
+/* Overlay fade */
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity 180ms ease;
+}
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
+}
+
+/* Sheet slide from bottom */
+.sheet-slide-enter-active,
+.sheet-slide-leave-active {
+  transition: transform 240ms ease, opacity 240ms ease;
+}
+.sheet-slide-enter-from,
+.sheet-slide-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+.sheet-slide-enter-to,
+.sheet-slide-leave-from {
+  transform: translateY(0);
+  opacity: 1;
 }
 </style>
