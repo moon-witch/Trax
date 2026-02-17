@@ -497,7 +497,7 @@ input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px so
 .date { font-weight: 600; font-size: 13px; }
 .sum { font-size: 13px; padding-right: 10px; }
 .ot { margin-left: 8px; opacity: 0.9; }
-.empty { position: absolute; top: 50%; right: -25px; transform: translateY(-50%); background: #efefef; border-radius: 4px; }
+.empty { position: absolute; top: 50%; right: -25px; transform: translateY(-50%); background: #efefef; border-radius: 4px;}
 
 .list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 10px; }
 .item { border-top: 1px solid #efefef; padding-top: 10px; }

@@ -307,7 +307,7 @@ onMounted(async () => {
     </Transition>
 
     <TransitionGroup appear name="fade" class="list" tag="ul" v-else-if="entries.length">
-      <li v-for="e in entries" :key="e.id" class="item">
+      <li v-for="e in entries" :key="e.id" class="item" :class="{ running: !e.end_time }">
         <div class="meta">
           <div class="mins">
             <strong>
@@ -467,6 +467,11 @@ button {
   align-items: center;
 }
 
+.running {
+ border: 1px solid #1FA1D0;
+  animation: 1s pulse infinite alternate;
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;
@@ -498,5 +503,14 @@ button {
 
 .no-entries {
   text-align: center;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0.97);
+  }
 }
 </style>
