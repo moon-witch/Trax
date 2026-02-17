@@ -43,19 +43,19 @@ onMounted(() => {
   display: flex;
   gap: 3rem;
   justify-content: center;
-  background: black;
+  background: #000b0e;
   padding-top: 1rem;
   border-top-left-radius: 40px;
   border-top-right-radius: 40px;
-  box-shadow: 0 -5px 30px 0 black;
+  box-shadow: 0 -5px 30px 0 #000b0e;
 }
 
 .nav-item {
   padding: .5rem;
   font-size: 1.25rem;
   font-weight: bold;
-  color: black;
-  background: white;
+  color: #000b0e;
+  background: #efefef;
   border-top-left-radius: 4px;
   border-top-right-radius: 4px;
   text-decoration: none;

@@ -146,7 +146,7 @@ function submit() {
   padding: 12px 12px 16px;
   max-height: 85dvh;
   overflow: auto;
-  color: black;
+  color: #000b0e;
   will-change: transform, opacity;
 }
 
@@ -161,7 +161,7 @@ function submit() {
 .title {
   font-size: 16px;
   font-weight: 600;
-  color: white;
+  color: #efefef;
   text-align: center;
 }
 
@@ -173,7 +173,7 @@ function submit() {
   height: 36px;
   font-size: 20px;
   line-height: 0;
-  color: white;
+  color: #efefef;
 }
 
 /* Body */
@@ -199,7 +199,7 @@ input {
   justify-self: center;
   text-align: center;
   background: #000b0e;
-  color: white;
+  color: #efefef;
   color-scheme: dark;
 }
 

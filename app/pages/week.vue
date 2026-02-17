@@ -53,6 +53,20 @@ function normalizeWorkDate(v: any): string {
   }
 }
 
+function cmpYmd(a: string, b: string) {
+  // YYYY-MM-DD lexicographic comparison works
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+function yesterdayLocalYmd() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - 1);
+  return formatLocalDate(d);
+}
+
 /** Time helpers */
 function hhmm(t: string | null) {
   if (!t) return "";
@@ -220,11 +234,46 @@ const groupedByDay = computed(() => {
   return days;
 });
 
-const weekCredit = computed(() => groupedByDay.value.reduce((acc, d) => acc + d.credit, 0));
-const weekWorkedEffective = computed(() => weekWorked.value + weekCredit.value);
+const weekCutoffYmd = computed(() => yesterdayLocalYmd());
 
-const weekTarget = computed(() => expectedWeek.value);
-const weekOvertime = computed(() => weekWorkedEffective.value - expectedWeek.value);
+const weekTargetEffective = computed(() => {
+  // Past week: full target. Current week: only up to yesterday. Future week: 0.
+  const cutoff = weekCutoffYmd.value;
+
+  // If this whole week is after cutoff -> future week
+  if (cmpYmd(range.value.from, cutoff) === 1) return 0;
+
+  // If this whole week is before/equal cutoff -> past week (or fully elapsed part)
+  // We still cap per-day by cutoff for safety, but it will include all 7 days anyway.
+  return groupedByDay.value.reduce((acc, d) => (cmpYmd(d.date, cutoff) <= 0 ? acc + d.target : acc), 0);
+});
+
+const weekWorkedEffective = computed(() => {
+  const cutoff = weekCutoffYmd.value;
+  if (cmpYmd(range.value.from, cutoff) === 1) return 0;
+
+  return groupedByDay.value.reduce((acc, d) => {
+    if (cmpYmd(d.date, cutoff) > 0) return acc;
+    return acc + d.worked + d.credit;
+  }, 0);
+});
+
+const weekWorkedActualEffective = computed(() => {
+  const cutoff = weekCutoffYmd.value;
+  if (cmpYmd(range.value.from, cutoff) === 1) return 0;
+
+  return groupedByDay.value.reduce((acc, d) => (cmpYmd(d.date, cutoff) <= 0 ? acc + d.worked : acc), 0);
+});
+
+const weekCreditEffective = computed(() => {
+  const cutoff = weekCutoffYmd.value;
+  if (cmpYmd(range.value.from, cutoff) === 1) return 0;
+
+  return groupedByDay.value.reduce((acc, d) => (cmpYmd(d.date, cutoff) <= 0 ? acc + d.credit : acc), 0);
+});
+
+const weekOvertime = computed(() => weekWorkedEffective.value - weekTargetEffective.value);
+
 
 /** Editor */
 const editorOpen = ref(false);
@@ -323,7 +372,7 @@ watch(refDate, refreshAll);
           <input type="date" v-model="refDate" />
         </label>
         <div class="range">
-          {{ range.from }} – {{ range.to }}
+          {{ formatDisplayDate(range.from) }} – {{ formatDisplayDate(range.to) }}
         </div>
       </div>
 
@@ -331,10 +380,10 @@ watch(refDate, refreshAll);
       <div class="stats">
         <div>
           <strong>Weekly hours</strong>
-          {{ formatMinutes(weekWorkedEffective) }} / {{ formatMinutes(expectedWeek) }}
+          {{ formatMinutes(weekWorkedEffective) }} / {{ formatMinutes(weekTargetEffective) }}
         </div>
-        <div class="muted" v-if="weekCredit">
-          Actual: {{ formatMinutes(weekWorked) }} · Holiday credit: {{ formatMinutes(weekCredit) }}
+        <div class="muted" v-if="weekCreditEffective">
+          Actual: {{ formatMinutes(weekWorkedActualEffective) }} · Holiday credit: {{ formatMinutes(weekCreditEffective) }}
         </div>
         <div><strong>Overtime</strong> {{ formatMinutes(weekOvertime) }}</div>
       </div>
@@ -416,21 +465,22 @@ watch(refDate, refreshAll);
 .top h1 { margin: 0 0 10px; font-size: 25px; text-align: center;}
 .picker { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; align-items: center; }
 label { display: grid; gap: 6px; font-size: 13px; text-align: center;}
-input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px solid #cfcfcf; }
+input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px solid #cfcfcf; background: none; color-scheme: dark;}
 .range { font-size: 13px; opacity: 0.85;}
 .stats { text-align: center; border: 1px solid #efefef; border-radius: 4px; padding: .5rem; font-size: 15px; margin: 1rem; }
 .stats .muted {padding-bottom: 1rem; padding-top: .25rem}
-.card { padding: 14px; background: none; color: black; }
+.card { padding: 14px; background: none; color: #000b0e; }
 .error { color: #b00020; font-size: 13px; margin: 0 0 10px; }
 .muted { font-size: 13px; opacity: 0.75; }
 
 .days { display: grid; gap: 10px; }
 
 .day {
-  border: 1px solid #e0e0e0;
+  border: 1px solid #efefef;
   border-radius: 4px;
   padding: 12px;
-  background: white;
+  background: #000b0e;
+  color: #efefef
 }
 
 .day-head {
@@ -439,14 +489,15 @@ input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px so
   justify-content: space-between;
   gap: 10px;
   align-items: baseline;
-  background: #e6e6e6;
+  background: #efefef;
   border-radius: 4px;
   padding: 4px 8px;
+  color: #000b0e;
 }
 .date { font-weight: 600; font-size: 13px; }
 .sum { font-size: 13px; padding-right: 10px; }
 .ot { margin-left: 8px; opacity: 0.9; }
-.empty { position: absolute; top: 50%; right: -25px; transform: translateY(-50%); background: white; border-radius: 4px; }
+.empty { position: absolute; top: 50%; right: -25px; transform: translateY(-50%); background: #efefef; border-radius: 4px; }
 
 .list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 10px; }
 .item { border-top: 1px solid #efefef; padding-top: 10px; }

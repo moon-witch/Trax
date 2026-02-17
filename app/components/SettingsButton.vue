@@ -235,7 +235,7 @@ async function doLogout() {
   right: 0;
 }
 svg { width: 2em; height: 2em; }
-.a { fill: none; stroke: white; stroke-linecap: round; stroke-linejoin: round; }
+.a { fill: none; stroke: #efefef; stroke-linecap: round; stroke-linejoin: round; }
 
 .overlay {
   z-index: 1;
@@ -249,12 +249,12 @@ svg { width: 2em; height: 2em; }
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: white;
+  background: #efefef;
   padding: 1rem;
   border: 1px solid #ccc;
   z-index: 2;
   border-radius: 6px;
-  color: black;
+  color: #000b0e;
   text-align: center;
   min-width: 300px;
   transition: min-height 220ms ease, padding 220ms ease;

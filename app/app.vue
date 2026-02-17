@@ -27,7 +27,7 @@ a {
   background: #000b0e;
   min-height: 100vh;
   font-family: 'Roboto', sans-serif;
-  color: white;
+  color: #efefef;
 }
 
 .page-enter-active,

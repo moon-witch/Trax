@@ -99,8 +99,8 @@ onMounted(loadStats);
 .wrap { padding: 16px; max-width: 720px; margin: 0 auto; padding-top: 5rem; text-align: center; }
 .top h1 { margin: 0 0 10px; font-size: 25px; text-align: center; }
 .stats { display: grid; gap: 6px; font-size: 20px; margin-bottom: 14px; margin-top: 3rem; }
-button { padding: 10px 12px; font-size: 14px; border-radius: 4px; border: none; background: none; color: white; }
-.card { padding: 14px; background: none; color: black; }
+button { padding: 10px 12px; font-size: 14px; border-radius: 4px; border: none; background: none; color: #efefef; }
+.card { padding: 14px; background: none; color: #000b0e; }
 .error { color: #b00020; font-size: 13px; margin: 0 0 10px; }
 .muted { font-size: 13px; opacity: 0.75; }
 </style>

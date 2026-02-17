@@ -177,7 +177,7 @@ button {
   font-size: 14px;
   border-radius: 10px;
   border: 1px solid #cfcfcf;
-  background: white;
+  background: #efefef;
 }
 
 .primary {
@@ -206,7 +206,7 @@ button {
 .dialog {
   width: 100%;
   max-width: 300px;
-  background: white;
+  background: #efefef;
   border-radius: 14px;
   padding: 16px;
   border: 1px solid #d7d7d7;
@@ -216,6 +216,6 @@ button {
 .dialog h2 {
   margin: 0 0 12px;
   font-size: 15px;
-  color: black;
+  color: #000b0e;
 }
 </style>

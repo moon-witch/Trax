@@ -423,7 +423,7 @@ button {
   font-size: 14px;
   border-radius: 10px;
   border: 1px solid #cfcfcf;
-  background: white;
+  background: #efefef;
   cursor: pointer;
 }
 
@@ -489,8 +489,8 @@ button {
 }
 
 .actions button {
-  background: black;
-  color: white;
+  background: #000b0e;
+  color: #efefef;
   border: none;
   font-size: 13px;
   cursor: pointer;

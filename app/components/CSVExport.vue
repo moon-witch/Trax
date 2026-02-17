@@ -131,8 +131,8 @@ async function exportMonthCsv() {
     });
 
     const rows = entries.map((e) => ({
-      name, // ← add user name
-      work_date: e.work_date,
+      name,
+      work_date: formatDisplayDate(e.work_date),
       start_time: hhmm(e.start_time),
       end_time: hhmm(e.end_time),
       break_minutes: e.break_minutes ?? 0,
@@ -169,7 +169,7 @@ async function exportMonthCsv() {
       <label class="field">
         Month
         <input type="month" v-model="month" :disabled="loading" />
-        <p class="muted">Range: {{ range.from }} – {{ range.to }}</p>
+        <p class="muted">Range: {{ formatDisplayDate(range.from) }} – {{ formatDisplayDate(range.to) }}</p>
       </label>
 
       <button class="btn" :disabled="loading" @click="exportMonthCsv">
@@ -187,7 +187,7 @@ async function exportMonthCsv() {
   border-radius: 4px;
   padding: 12px;
   background: none;
-  color: white;
+  color: #efefef;
   max-width: 720px;
   margin-top: 3rem;
 }
@@ -217,6 +217,7 @@ input {
   border-radius: 10px;
   border: 1px solid #cfcfcf;
   text-align: center;
+  background: #efefef;
 }
 
 .btn {
@@ -224,7 +225,7 @@ input {
   font-size: 14px;
   border-radius: 6px;
   border: none;
-  background: #e6e6e6;
+  background: #efefef;
   cursor: pointer;
   margin-top: 1rem;
 }

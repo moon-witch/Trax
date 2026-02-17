@@ -157,7 +157,7 @@ button {
   font-size: 13px;
   border-radius: 8px;
   border: 1px solid #cfcfcf;
-  background: white;
+  background: #efefef;
 }
 
 button:disabled {
