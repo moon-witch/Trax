@@ -1,25 +1,17 @@
 <script setup lang="ts">
 import { ref, watch, computed } from "vue";
-
-type Entry = {
-  id?: string;
-  work_date: string; // YYYY-MM-DD
-  start_time: string; // HH:MM
-  end_time: string; // HH:MM
-  break_minutes: number;
-  note: string | null;
-};
+import type { EntryForm } from "@/types/entry";
 
 const props = defineProps<{
   modelValue: boolean;
-  entry: Entry; // prefilled
+  entry: EntryForm; // prefilled
   title: string;
   submitLabel: string;
 }>();
 
 const emit = defineEmits<{
   (e: "update:modelValue", v: boolean): void;
-  (e: "submit", entry: Entry): void;
+  (e: "submit", entry: EntryForm): void;
 }>();
 
 const open = computed({
@@ -27,7 +19,7 @@ const open = computed({
   set: (v: boolean) => emit("update:modelValue", v),
 });
 
-const local = ref<Entry>({ ...props.entry });
+const local = ref<EntryForm>({ ...props.entry });
 
 watch(
     () => props.entry,
@@ -42,7 +34,7 @@ function close() {
   error.value = null;
 }
 
-function validate(e: Entry) {
+function validate(e: EntryForm) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(e.work_date)) return "Invalid date";
   if (!/^\d{2}:\d{2}$/.test(e.start_time)) return "Invalid start time";
   if (!/^\d{2}:\d{2}$/.test(e.end_time)) return "Invalid end time";
@@ -148,6 +140,13 @@ function submit() {
   overflow: auto;
   color: #000b0e;
   will-change: transform, opacity;
+}
+
+@media (min-width: 1024px) {
+  .sheet {
+    width: 50%;
+    justify-self: center;
+  }
 }
 
 /* Header */

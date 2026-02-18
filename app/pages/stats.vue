@@ -1,33 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import CSVExport from "~/components/CSVExport.vue";
-
-type Stats = {
-  // current user settings (informational only)
-  baseline_weekly_minutes?: number;
-  baseline_daily_minutes?: number;
-
-  // overtime aggregates (your API may return one or multiple)
-  overtime_total_minutes?: number;   // preferred (all-time)
-  overtime_daily_minutes?: number;   // sum of daily OT (all-time)
-  overtime_weekly_minutes?: number;  // sum of weekly balance (all-time)
-
-  total_worked_minutes: number;
-  weeks_count: number;
-  days_count: number;
-};
+import LoadingError from "~/components/LoadingError.vue";
+import { formatMinutes } from "@/utils/time";
+import type { Stats } from "@/types/entry";
 
 const loading = ref(false);
 const error = ref<string | null>(null);
 const stats = ref<Stats | null>(null);
-
-function formatMinutes(min: number) {
-  const sign = min < 0 ? "-" : "";
-  const abs = Math.abs(min);
-  const h = Math.floor(abs / 60);
-  const m = abs % 60;
-  return `${sign}${h}:${String(m).padStart(2, "0")}`;
-}
 
 /**
  * Prefer a single "overtime_total_minutes" coming from the backend (Option B).
@@ -84,9 +64,8 @@ onMounted(loadStats);
     </header>
 
     <section v-if="error || loading || !stats" class="card">
-      <p v-if="error" class="error">{{ error }}</p>
-      <div v-if="loading" class="muted">Loading…</div>
-      <div v-else-if="!stats" class="muted">No stats available.</div>
+      <LoadingError :error="error" :loading="loading" />
+      <div v-if="!loading && !error && !stats" class="muted">No stats available.</div>
     </section>
 
     <section v-else class="card">
@@ -101,6 +80,5 @@ onMounted(loadStats);
 .stats { display: grid; gap: 6px; font-size: 20px; margin-bottom: 14px; margin-top: 3rem; }
 button { padding: 10px 12px; font-size: 14px; border-radius: 4px; border: none; background: none; color: #efefef; }
 .card { padding: 14px; background: none; color: #000b0e; }
-.error { color: #b00020; font-size: 13px; margin: 0 0 10px; }
 .muted { font-size: 13px; opacity: 0.75; }
 </style>

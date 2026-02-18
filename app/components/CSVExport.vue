@@ -1,19 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-
-type Entry = {
-  id: string;
-  work_date: string; // YYYY-MM-DD (or ISO; we normalize)
-  start_time: string; // HH:MM:SS
-  end_time: string | null; // running allowed
-  break_minutes: number;
-  note: string | null;
-
-  // Optional if your API includes them; harmless if absent
-  baseline_daily_minutes_at_time?: number;
-  baseline_weekly_minutes_at_time?: number;
-  workdays_per_week_at_time?: number;
-};
+import type { Entry } from "@/types/entry";
+import { formatDisplayDate, formatLocalDate, normalizeWorkDate } from "@/utils/date";
+import { hhmm, workedMinutes } from "@/utils/time";
 
 async function fetchUserName(): Promise<string> {
   try {
@@ -23,23 +12,6 @@ async function fetchUserName(): Promise<string> {
     return String(r?.name || "");
   } catch {
     return "";
-  }
-}
-
-/** Date helpers (local time) */
-function formatLocalDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function normalizeWorkDate(v: any): string {
-  if (typeof v === "string") return v.slice(0, 10);
-  try {
-    return formatLocalDate(new Date(v));
-  } catch {
-    return String(v).slice(0, 10);
   }
 }
 
@@ -88,23 +60,6 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 const range = computed(() => monthRangeLocal(month.value));
-
-/** Optional: include derived minutes in export */
-function hhmm(t: string | null) {
-  if (!t) return "";
-  return String(t).slice(0, 5);
-}
-function toMinutes(hm: string) {
-  const [h, m] = hm.split(":").map(Number);
-  return h * 60 + m;
-}
-function workedMinutes(e: Entry) {
-  const s = toMinutes(hhmm(e.start_time));
-  const enStr = hhmm(e.end_time);
-  if (!enStr) return 0;
-  const en = toMinutes(enStr);
-  return Math.max(0, en - s - (e.break_minutes || 0));
-}
 
 async function exportMonthCsv() {
   error.value = null;

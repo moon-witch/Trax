@@ -1,40 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
 import EntryEditorSheet from "@/components/EntryEditorSheet.vue";
+import LoadingError from "@/components/LoadingError.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useSettings } from "@/composables/useSettings";
+import { useEntries } from "@/composables/useEntries";
+import { formatDisplayDate, formatLocalDate, normalizeWorkDate, parseLocalDate } from "@/utils/date";
+import { hhmm, workedMinutes, formatMinutes } from "@/utils/time";
+import type { Entry, EntryForm } from "@/types/entry";
 
-type Entry = {
-  id: string;
-  work_date: string; // normalized: YYYY-MM-DD
-  start_time: string; // HH:MM:SS
-  end_time: string | null; // allow null (running)
-  break_minutes: number;
-  note: string | null;
-
-  // snapshot baseline for overtime calculations
-  baseline_daily_minutes_at_time: number;
-};
-
-type EntryForm = {
-  id?: string;
-  work_date: string; // YYYY-MM-DD
-  start_time: string; // HH:MM
-  end_time: string; // HH:MM
-  break_minutes: number;
-  note: string | null;
-};
-
-/** Date helpers (local time) */
-function formatLocalDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-function parseLocalDate(dateStr: string) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
+/** Week range helper */
 function weekRangeLocal(dateStr: string) {
   const d = parseLocalDate(dateStr);
   const day = (d.getDay() + 6) % 7; // 0=Mon..6=Sun
@@ -43,14 +18,6 @@ function weekRangeLocal(dateStr: string) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return { from: formatLocalDate(monday), to: formatLocalDate(sunday) };
-}
-function normalizeWorkDate(v: any): string {
-  if (typeof v === "string") return v.slice(0, 10);
-  try {
-    return formatLocalDate(new Date(v));
-  } catch {
-    return String(v).slice(0, 10);
-  }
 }
 
 function cmpYmd(a: string, b: string) {
@@ -67,31 +34,8 @@ function yesterdayLocalYmd() {
   return formatLocalDate(d);
 }
 
-/** Time helpers */
-function hhmm(t: string | null) {
-  if (!t) return "";
-  return String(t).slice(0, 5);
-}
-function toMinutes(hm: string) {
-  const [h, m] = hm.split(":").map(Number);
-  return h * 60 + m;
-}
-function workedMinutes(e: Entry) {
-  const s = toMinutes(hhmm(e.start_time));
-  const enStr = hhmm(e.end_time);
-  if (!enStr) return 0;
-  const en = toMinutes(enStr);
-  return Math.max(0, en - s - (e.break_minutes || 0));
-}
-function formatMinutes(min: number) {
-  const sign = min < 0 ? "-" : "";
-  const abs = Math.abs(min);
-  const h = Math.floor(abs / 60);
-  const m = abs % 60;
-  return `${sign}${h}:${String(m).padStart(2, "0")}`;
-}
+/** Baseline snapshot rule for a day */
 
-/** Baseline snapshot rule for a day: baseline of earliest entry that day (kept for reference/compat) */
 function dailyTargetMinutes(entriesForDay: Entry[]): number {
   if (!entriesForDay.length) return 0;
   const sorted = [...entriesForDay].sort((a, b) => hhmm(a.start_time).localeCompare(hhmm(b.start_time)));
@@ -119,6 +63,8 @@ function distributedWeeklyTargets(weeklyMinutes: number, workdays: number) {
 function isHoliday(holidaySet: Set<string>, dateYmd: string) {
   return holidaySet.has(dateYmd);
 }
+
+const { createEntry, updateEntry, deleteEntry: deleteEntryApi, loading: entriesLoading, error: entriesError } = useEntries();
 
 const refDate = ref(formatLocalDate(new Date())); // YYYY-MM-DD
 const loading = ref(true);
@@ -285,6 +231,9 @@ const editorEntry = ref<EntryForm>({
   break_minutes: 0,
   note: null,
 });
+
+const confirmDeleteOpen = ref(false);
+const entryToDelete = ref<Entry | null>(null);
 function openCreate(day: string) {
   editorMode.value = "create";
   editorEntry.value = {
@@ -310,46 +259,34 @@ function openEdit(e: Entry) {
 }
 async function submitEditor(e: EntryForm) {
   error.value = null;
-  loading.value = true;
   try {
     if (editorMode.value === "create") {
-      await $fetch("/api/entries", {
-        method: "POST",
-        credentials: "include",
-        body: e,
-      });
+      await createEntry(e);
     } else {
-      if (!e.id) throw new Error("Missing entry id");
-      await $fetch(`/api/entries/${e.id}`, {
-        method: "PUT",
-        credentials: "include",
-        body: {
-          work_date: e.work_date,
-          start_time: e.start_time,
-          end_time: e.end_time,
-          break_minutes: e.break_minutes,
-          note: e.note,
-        },
-      });
+      await updateEntry(e);
     }
     editorOpen.value = false;
     await loadWeek();
   } catch (err: any) {
-    error.value = err?.data?.statusMessage || err?.data?.message || err?.message || "Failed to save entry";
-  } finally {
-    loading.value = false;
+    error.value = entriesError.value || "Failed to save entry";
   }
 }
-async function deleteEntry(e: Entry) {
+function showDeleteConfirm(e: Entry) {
+  entryToDelete.value = e;
+  confirmDeleteOpen.value = true;
+}
+
+async function handleDeleteEntry() {
+  if (!entryToDelete.value) return;
+
   error.value = null;
-  loading.value = true;
   try {
-    await $fetch(`/api/entries/${e.id}`, { method: "DELETE", credentials: "include" });
+    await deleteEntryApi(entryToDelete.value.id);
     await loadWeek();
   } catch (err: any) {
-    error.value = err?.data?.statusMessage || err?.data?.message || err?.message || "Failed to delete entry";
+    error.value = entriesError.value || "Failed to delete entry";
   } finally {
-    loading.value = false;
+    entryToDelete.value = null;
   }
 }
 
@@ -390,10 +327,9 @@ watch(refDate, refreshAll);
     </header>
 
     <section class="card">
-      <p v-if="error" class="error">{{ error }}</p>
-      <div v-if="loading" class="muted">Loading…</div>
+      <LoadingError :error="error" :loading="loading" />
 
-      <div v-else class="days">
+      <div v-if="!loading" class="days">
         <article v-for="d in groupedByDay" :key="d.date" class="day">
           <div class="day-head">
             <div class="date">
@@ -441,8 +377,8 @@ watch(refDate, refreshAll);
               </div>
 
               <div class="actions">
-                <button :disabled="loading || !e.end_time" @click="openEdit(e)">Edit</button>
-                <button :disabled="loading || !e.end_time" @click="deleteEntry(e)">Delete</button>
+                <button :disabled="loading || entriesLoading || !e.end_time" @click="openEdit(e)">Edit</button>
+                <button :disabled="loading || entriesLoading || !e.end_time" @click="showDeleteConfirm(e)">Delete</button>
               </div>
             </li>
           </TransitionGroup>
@@ -457,6 +393,15 @@ watch(refDate, refreshAll);
         :entry="editorEntry"
         @submit="submitEditor"
     />
+
+    <ConfirmDialog
+      v-model="confirmDeleteOpen"
+      title="Delete Entry"
+      :message="entryToDelete ? `Do you want to delete the entry for ${formatDisplayDate(entryToDelete.work_date)}?` : ''"
+      confirm-label="Delete"
+      cancel-label="Cancel"
+      @confirm="handleDeleteEntry"
+    />
   </main>
 </template>
 
@@ -470,8 +415,6 @@ input { padding: 10px 12px; font-size: 14px; border-radius: 10px; border: 1px so
 .stats { text-align: center; border: 1px solid #efefef; border-radius: 4px; padding: .5rem; font-size: 15px; margin: 1rem; }
 .stats .muted {padding-bottom: 1rem; padding-top: .25rem}
 .card { padding: 14px; background: none; color: #000b0e; }
-.error { color: #b00020; font-size: 13px; margin: 0 0 10px; }
-.muted { font-size: 13px; opacity: 0.75; }
 
 .days { display: grid; gap: 10px; }
 

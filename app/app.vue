@@ -23,6 +23,10 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+button {
+  cursor: pointer;
+}
+
 .app-container {
   background: #000b0e;
   min-height: 100vh;
