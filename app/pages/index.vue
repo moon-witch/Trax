@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import EntryEditorSheet from "@/components/EntryEditorSheet.vue";
 import EntryListItem from "@/components/EntryListItem.vue";
 import StatsDisplay from "@/components/StatsDisplay.vue";
 import LoadingError from "@/components/LoadingError.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import StaleTimerModal from "@/components/StaleTimerModal.vue";
 import { useTimer } from "@/composables/useTimer";
 import { useSettings } from "@/composables/useSettings";
 import { useEntries } from "@/composables/useEntries";
@@ -37,6 +38,13 @@ const editorEntry = ref<EntryForm>({
 
 const confirmDeleteOpen = ref(false);
 const entryToDelete = ref<Entry | null>(null);
+
+const staleTimerOpen = ref(false);
+const staleEntry = computed(() => timerStatus.value?.staleEntry ?? null);
+
+watch(staleEntry, (entry) => {
+  if (entry) staleTimerOpen.value = true;
+});
 
 function dailyOvertime(minWorked: number) {
   return Math.max(0, minWorked - 480);
@@ -199,6 +207,24 @@ async function onToggleBreak() {
   }
 }
 
+async function resolveStaleTimer(action: "stop_eod" | "discard") {
+  error.value = null;
+  loading.value = true;
+  try {
+    await $fetch("/api/timer/stale/resolve", {
+      method: "POST",
+      body: { action },
+      credentials: "include",
+    });
+    staleTimerOpen.value = false;
+    await Promise.all([refreshTimer(), loadToday()]);
+  } catch (e: any) {
+    error.value = e?.data?.statusMessage || e?.message || "Failed to resolve timer";
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function refreshAll() {
   await Promise.all([refreshTimer(), loadToday()]);
 }
@@ -292,6 +318,14 @@ onMounted(async () => {
       confirm-label="Delete"
       cancel-label="Cancel"
       @confirm="handleDeleteEntry"
+    />
+
+    <StaleTimerModal
+      :model-value="staleTimerOpen"
+      :entry="staleEntry"
+      :loading="loading"
+      @stop-eod="resolveStaleTimer('stop_eod')"
+      @discard="resolveStaleTimer('discard')"
     />
   </main>
 </template>

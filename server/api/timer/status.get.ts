@@ -30,7 +30,34 @@ export default defineEventHandler(async (event) => {
         [userId, today]
     );
 
-    if (!r.rowCount) return { ok: true, running: false, entry: null };
+    // Check for a stale running entry from a previous day
+    const staleR = await pool.query(
+        `
+    select
+      id,
+      to_char(work_date, 'YYYY-MM-DD') as work_date,
+      start_time::text as start_time,
+      note
+    from work_entries
+    where user_id = $1
+      and work_date < $2::date
+      and (end_time is null or is_running = true)
+    order by work_date desc, start_time desc
+    limit 1
+    `,
+        [userId, today]
+    );
+
+    const staleEntry = staleR.rowCount
+        ? {
+              id: staleR.rows[0].id,
+              work_date: staleR.rows[0].work_date,
+              start_time: staleR.rows[0].start_time.slice(0, 5),
+              note: staleR.rows[0].note ?? null,
+          }
+        : null;
+
+    if (!r.rowCount) return { ok: true, running: false, entry: null, staleEntry };
 
     const e = r.rows[0];
     const running = e.is_running === true || e.end_time === null;
@@ -38,6 +65,7 @@ export default defineEventHandler(async (event) => {
     return {
         ok: true,
         running,
+        staleEntry,
         entry: {
             id: e.id,
             work_date: e.work_date,
