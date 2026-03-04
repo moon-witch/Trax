@@ -106,7 +106,7 @@ async function exportMonthCsv() {
     ];
 
     const csv = toCsv(rows, headers);
-    const filename = `entries_${month.value}.csv`;
+    const filename = `Arbeitszeiten_${name}_${new Date().getFullYear()}_${month.value}.csv`;
     downloadTextFile(filename, csv);
   } catch (e: any) {
     error.value = e?.data?.statusMessage || e?.message || "Failed to export CSV";
