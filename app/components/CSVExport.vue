@@ -23,6 +23,19 @@ function monthRangeLocal(yyyyMm: string) {
   return { from: formatLocalDate(first), to: formatLocalDate(last) };
 }
 
+/** Return the ISO week-start (Monday) for a YYYY-MM-DD string as YYYY-MM-DD */
+function isoWeekStart(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y!, m! - 1, d!);
+  const dow = (date.getDay() + 6) % 7; // 0=Mon … 6=Sun
+  date.setDate(date.getDate() - dow);
+  return formatLocalDate(date);
+}
+
+function minutesToHours(min: number): string {
+  return (min / 60).toFixed(2);
+}
+
 /** CSV helpers */
 function csvEscape(v: unknown): string {
   const s = v === null || v === undefined ? "" : String(v);
@@ -85,27 +98,54 @@ async function exportMonthCsv() {
       return hhmm(a.start_time).localeCompare(hhmm(b.start_time));
     });
 
-    const rows = entries.map((e) => ({
-      name,
-      work_date: formatDisplayDate(e.work_date),
-      start_time: hhmm(e.start_time),
-      end_time: hhmm(e.end_time),
-      break_minutes: e.break_minutes ?? 0,
-      worked_minutes: e.end_time ? workedMinutes(e) : "",
-      note: e.note ?? "",
-    }));
+    const rows = entries.map((e) => {
+      const mins = e.end_time ? workedMinutes(e) : null;
+      return {
+        name,
+        work_date: formatDisplayDate(e.work_date),
+        start_time: hhmm(e.start_time),
+        end_time: hhmm(e.end_time),
+        break_minutes: e.break_minutes ?? 0,
+        worked_minutes: mins ?? "",
+        worked_hours: mins !== null ? minutesToHours(mins) : "",
+        note: e.note ?? "",
+      };
+    });
+
+    // Week subtotals
+    const weekMap = new Map<string, number>(); // weekStart -> total minutes
+    for (const e of entries) {
+      if (!e.end_time) continue;
+      const ws = isoWeekStart(e.work_date);
+      weekMap.set(ws, (weekMap.get(ws) ?? 0) + workedMinutes(e));
+    }
+    const sortedWeeks = Array.from(weekMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+    const monthTotal = sortedWeeks.reduce((sum, [, m]) => sum + m, 0);
+
+    const empty = { name: "", work_date: "", start_time: "", end_time: "", break_minutes: "", worked_minutes: "", worked_hours: "", note: "" };
+    const summaryRows = [
+      empty,
+      ...sortedWeeks.map(([, mins], i) => ({
+        ...empty,
+        work_date: `Week ${i + 1}`,
+        worked_minutes: mins,
+        worked_hours: minutesToHours(mins),
+      })),
+      { ...empty, work_date: "Total Month", worked_minutes: monthTotal, worked_hours: minutesToHours(monthTotal) },
+    ];
 
     const headers = [
-      "name",              // ← new column
+      "name",
       "work_date",
       "start_time",
       "end_time",
       "break_minutes",
       "worked_minutes",
+      "worked_hours",
       "note",
     ];
 
-    const csv = toCsv(rows, headers);
+    const csv = toCsv([...rows, ...summaryRows], headers);
     const filename = `Arbeitszeiten_${name}_${month.value}.csv`;
     downloadTextFile(filename, csv);
   } catch (e: any) {
