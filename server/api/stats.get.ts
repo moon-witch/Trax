@@ -152,8 +152,10 @@ export default defineEventHandler(async (event) => {
 
         const isCurrentWeek = weekStart === currentWeekStartYmd;
 
-        // Determine which days to include for this week
-        const includeUpTo = isCurrentWeek ? cutoffYmd : to;
+        // Determine which days to include for this week.
+        // Future weeks (weekStart > currentWeekStartYmd) get cutoffYmd too,
+        // which is before their weekStart, so the check below skips them entirely.
+        const includeUpTo = weekStart >= currentWeekStartYmd ? cutoffYmd : to;
 
         // If the cutoff is before the start of this week, include nothing (e.g., Monday -> yesterday is Sunday)
         if (includeUpTo < weekStart) continue;
