@@ -23,6 +23,11 @@ const workdays = ref(5);
 const userName = ref("");
 const initialUserName = ref("");
 
+/** Account fields */
+const userEmail = ref("");
+const initialUserEmail = ref("");
+const newPassword = ref("");
+
 /** For smooth size changes + content fade-in after load */
 const panelRef = ref<HTMLElement | null>(null);
 const panelMinHeight = ref<number | null>(null);
@@ -57,6 +62,9 @@ watch(open, async (v) => {
 
     userName.value = String(nameResp?.name ?? "");
     initialUserName.value = userName.value;
+    userEmail.value = String((nameResp as any)?.email ?? "");
+    initialUserEmail.value = userEmail.value;
+    newPassword.value = "";
   } catch (e: any) {
     error.value = e?.message || "Failed to load settings";
   } finally {
@@ -105,6 +113,28 @@ async function save() {
       });
       userName.value = String(r?.name ?? nameTrimmed);
       initialUserName.value = userName.value;
+    }
+
+    // Update email if changed
+    const emailTrimmed = userEmail.value.trim().toLowerCase();
+    if (emailTrimmed !== initialUserEmail.value) {
+      const r = await $fetch<{ ok: boolean; email: string }>("/api/user/email", {
+        method: "PUT",
+        credentials: "include",
+        body: { email: emailTrimmed },
+      });
+      userEmail.value = String(r?.email ?? emailTrimmed);
+      initialUserEmail.value = userEmail.value;
+    }
+
+    // Update password if provided
+    if (newPassword.value) {
+      await $fetch("/api/user/password", {
+        method: "PUT",
+        credentials: "include",
+        body: { newPassword: newPassword.value },
+      });
+      newPassword.value = "";
     }
 
     open.value = false;
@@ -180,6 +210,27 @@ async function doLogout() {
                     v-model="userName"
                     maxlength="60"
                     autocomplete="name"
+                />
+              </label>
+
+              <label v-if="contentReady" key="email">
+                Email
+                <input
+                    class="name-input"
+                    type="email"
+                    v-model="userEmail"
+                    autocomplete="email"
+                />
+              </label>
+
+              <label v-if="contentReady" key="password">
+                New password
+                <input
+                    class="name-input"
+                    type="password"
+                    v-model="newPassword"
+                    placeholder="Leave blank to keep"
+                    autocomplete="new-password"
                 />
               </label>
 

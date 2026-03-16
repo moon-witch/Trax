@@ -15,6 +15,15 @@ const error = ref<string | null>(null);
 const askSecret = ref(false);
 const secret = ref("");
 
+/** Forgot password dialog state */
+const askForgot = ref(false);
+const forgotEmail = ref("");
+const forgotSecret = ref("");
+const forgotNewPassword = ref("");
+const forgotLoading = ref(false);
+const forgotError = ref<string | null>(null);
+const forgotSuccess = ref(false);
+
 function nextPath() {
   const n = route.query.next;
   return typeof n === "string" && n.startsWith("/") ? n : "/";
@@ -76,6 +85,35 @@ function confirmRegister() {
   askSecret.value = false;
   doAuth("register", secret.value);
 }
+
+function openForgot() {
+  forgotEmail.value = email.value;
+  forgotSecret.value = "";
+  forgotNewPassword.value = "";
+  forgotError.value = null;
+  forgotSuccess.value = false;
+  askForgot.value = true;
+}
+
+async function confirmForgot() {
+  forgotError.value = null;
+  forgotLoading.value = true;
+  try {
+    await $fetch("/api/auth/forgot-password", {
+      method: "POST",
+      body: {
+        email: forgotEmail.value,
+        secret: forgotSecret.value,
+        newPassword: forgotNewPassword.value,
+      },
+    });
+    forgotSuccess.value = true;
+  } catch (e: any) {
+    forgotError.value = formatError(e);
+  } finally {
+    forgotLoading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -103,6 +141,8 @@ function confirmRegister() {
         </button>
       </div>
 
+      <button class="forgot-link" @click="openForgot">Forgot password?</button>
+
       <p v-if="error" class="error">{{ error }}</p>
     </section>
 
@@ -126,6 +166,50 @@ function confirmRegister() {
             Cancel
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Forgot Password Dialog -->
+    <div v-if="askForgot" class="overlay">
+      <div class="dialog">
+        <h2>Reset Password</h2>
+
+        <template v-if="!forgotSuccess">
+          <input
+              v-model.trim="forgotEmail"
+              type="email"
+              placeholder="Email"
+              autocomplete="email"
+          />
+
+          <input
+              v-model="forgotSecret"
+              type="password"
+              placeholder="Registration secret"
+              autocomplete="off"
+          />
+
+          <input
+              v-model="forgotNewPassword"
+              type="password"
+              placeholder="New password (min 10 chars)"
+              autocomplete="new-password"
+          />
+
+          <p v-if="forgotError" class="error-inline">{{ forgotError }}</p>
+
+          <div class="row">
+            <button class="primary" :disabled="forgotLoading" @click="confirmForgot">
+              {{ forgotLoading ? "Please wait…" : "Reset" }}
+            </button>
+            <button @click="askForgot = false">Cancel</button>
+          </div>
+        </template>
+
+        <template v-else>
+          <p class="success">Password updated successfully.</p>
+          <button class="primary" @click="askForgot = false">Close</button>
+        </template>
       </div>
     </div>
   </main>
@@ -185,6 +269,16 @@ button {
   font-weight: 600;
 }
 
+.forgot-link {
+  margin-top: 10px;
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
 .error {
   color: #b00020;
   font-size: 13px;
@@ -192,6 +286,18 @@ button {
   bottom: 7rem;
   left: 50%;
   transform: translateX(-50%);
+}
+
+.error-inline {
+  color: #b00020;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.success {
+  color: #1a7a3a;
+  font-size: 13px;
+  margin: 0 0 12px;
 }
 
 /* Dialog */
@@ -211,10 +317,13 @@ button {
   padding: 16px;
   border: 1px solid #d7d7d7;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .dialog h2 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 15px;
   color: #000b0e;
 }

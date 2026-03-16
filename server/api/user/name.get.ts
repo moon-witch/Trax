@@ -6,12 +6,17 @@ export default defineEventHandler(async (event) => {
     const userId = await requireUserId(event);
 
     const r = await pool.query(
-        `select name
+        `select name, email
      from app_users
      where id = $1
      limit 1`,
         [userId]
     );
 
-    return { ok: true, name: (r.rowCount ? (r.rows[0].name as string | null) : null) ?? "" };
+    const row = r.rowCount ? r.rows[0] : null;
+    return {
+        ok: true,
+        name: (row?.name as string | null) ?? "",
+        email: (row?.email as string | null) ?? "",
+    };
 });
