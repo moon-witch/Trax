@@ -224,7 +224,7 @@ async function doLogout() {
               </label>
 
               <label v-if="contentReady" key="password">
-                New password
+                Password
                 <input
                     class="name-input"
                     type="password"
